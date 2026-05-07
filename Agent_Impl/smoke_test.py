@@ -27,10 +27,11 @@ import sys
 import time
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from pathlib import Path
 
 # Configure logging before importing agent modules so all loggers are captured
 logging.basicConfig(
-    level=logging.WARNING,           # suppress DEBUG/INFO from langgraph internals
+    level=logging.WARNING,  # suppress DEBUG/INFO from langgraph internals
     format="%(levelname)s | %(name)s | %(message)s",
     stream=sys.stdout,
 )
@@ -44,13 +45,15 @@ from config import AGENT_STEP_LIMIT
 
 # Pretty-print helpers
 
-SEP  = "─" * 70
+SEP = "─" * 70
 SEP2 = "═" * 70
 
 
 def _print_message(msg, index: int):
     if isinstance(msg, SystemMessage):
-        print(f"  [{index}] SystemMessage ({len(str(msg.content))} chars) — system prompt")
+        print(
+            f"  [{index}] SystemMessage ({len(str(msg.content))} chars) — system prompt"
+        )
 
     elif isinstance(msg, HumanMessage):
         print(f"  [{index}] HumanMessage: {str(msg.content)[:120]}")
@@ -58,10 +61,8 @@ def _print_message(msg, index: int):
     elif isinstance(msg, AIMessage):
         tool_calls = msg.tool_calls or []
         if tool_calls:
-            calls_str = ", ".join(
-                f"{tc['name']}({list(tc['args'].keys())})"
-                for tc in tool_calls
-            )
+            calls_str = ", ".join(f"{tc['name']}({list(tc['args'].keys())})"
+                                  for tc in tool_calls)
             print(f"  [{index}] AIMessage → tool calls: {calls_str}")
         else:
             content_preview = str(msg.content)[:200]
@@ -117,6 +118,7 @@ def _determine_outcome(final_state: dict) -> tuple[str, bool]:
 
 # Main
 
+
 def run_smoke_test(condition: str):
     print(SEP2)
     print(f"SMOKE TEST — Condition {condition}")
@@ -149,7 +151,9 @@ def run_smoke_test(condition: str):
             config={"recursion_limit": GRAPH_RECURSION_LIMIT},
         )
     except Exception as e:
-        print(f"\n✗ SMOKE TEST FAILED — unhandled exception during graph.invoke():")
+        print(
+            f"\n✗ SMOKE TEST FAILED — unhandled exception during graph.invoke():"
+        )
         print(f"  {type(e).__name__}: {e}")
         raise
 
@@ -167,6 +171,43 @@ def run_smoke_test(condition: str):
         print(f"✗ SMOKE TEST FAILED — outcome: {outcome}")
         sys.exit(1)
 
+    return final_state
+
+
+def dump_session_to_json(state: dict,
+                         condition: str,
+                         path: str = "smoke_output.json") -> None:
+    """Serialise the full session state to a JSON file for inspection."""
+
+    def serialise_message(msg) -> dict:
+        base = {
+            "type":
+            type(msg).__name__,
+            "content":
+            msg.content if isinstance(msg.content, str) else str(msg.content),
+        }
+        if isinstance(msg, AIMessage):
+            base["tool_calls"] = [{
+                "name": tc["name"],
+                "args": tc["args"],
+                "id": tc["id"],
+            } for tc in (msg.tool_calls or [])]
+        if isinstance(msg, ToolMessage):
+            base["tool_call_id"] = msg.tool_call_id
+            base["name"] = msg.name
+        return base
+
+    output = {
+        "condition": condition,
+        "step_count": state.get("step_count"),
+        "terminated": state.get("terminated"),
+        "total_messages": len(state.get("messages", [])),
+        "messages": [serialise_message(m) for m in state.get("messages", [])],
+    }
+
+    Path(path).write_text(json.dumps(output, indent=2), encoding="utf-8")
+    print(f"\n[smoke] Session dumped → {path}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="End-to-end agent smoke test")
@@ -177,4 +218,5 @@ if __name__ == "__main__":
         help="Observability condition to test (default: B)",
     )
     args = parser.parse_args()
-    run_smoke_test(args.condition)
+    final_state = run_smoke_test(args.condition)
+    dump_session_to_json(final_state, args.condition, path="smoke_output.json")

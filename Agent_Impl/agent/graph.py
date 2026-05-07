@@ -1,12 +1,9 @@
-
 # build_agent(condition) — factory that constructs and returns a
 # compiled LangGraph StateGraph for a diagnostic session.
 #
 # One compiled graph is built per condition per experiment run.
 # The same compiled graph is reused across all trials for that condition.
 # Each trial gets a fresh initial state via build_initial_state().
-
-
 
 import logging
 from langchain_openai import ChatOpenAI
@@ -25,7 +22,8 @@ from config import (
     MODEL_TEMPERATURE,
     VALID_CONDITIONS,
 )
-from tools.tool_registry import get_tools_and_prompt
+from tools.tool_registry import get_tools
+from prompts.system_prompt import build_system_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +50,7 @@ GRAPH_RECURSION_LIMIT: int = AGENT_STEP_LIMIT * 2 + 1
 # build_agent
 
 
-def build_agent(condition: str) -> CompiledStateGraph:
+def build_agent(condition: str) -> tuple[CompiledStateGraph, str]:
     """
     Build and return a compiled LangGraph StateGraph for the given
     observability condition.
@@ -68,7 +66,8 @@ def build_agent(condition: str) -> CompiledStateGraph:
     logger.info(f"Building agent for condition {condition}.")
 
     # --- Tools and system prompt ---
-    tools, system_prompt = get_tools_and_prompt(condition)
+    tools = get_tools(condition)
+    system_prompt = build_system_prompt(condition)
     tool_names = [t.name for t in tools]
     logger.info(f"Condition {condition} tools: {tool_names}")
 
@@ -106,7 +105,6 @@ def build_agent(condition: str) -> CompiledStateGraph:
         logger.warning(f"[graph] agent produced no tool calls at step "
                        f"{state['step_count']}. Routing to END.")
         return END
-
 
     def check_termination(state: AgentState) -> str:
         """

@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from langgraph.graph.state import CompiledStateGraph
-from tools.tool_registry import get_tools_and_prompt
-
+from tools.tool_registry import get_tools
+from prompts.system_prompt import build_system_prompt
 from agent.graph import GRAPH_RECURSION_LIMIT, build_agent
 from agent.state import AgentState, build_initial_state
 from config import AGENT_STEP_LIMIT
@@ -23,6 +23,7 @@ from config import AGENT_STEP_LIMIT
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_llm():
@@ -74,10 +75,10 @@ _CONDITION_B_TOOLS = frozenset({
 _A_EXCLUSIVE = _CONDITION_A_TOOLS - _CONDITION_B_TOOLS
 _B_EXCLUSIVE = _CONDITION_B_TOOLS - _CONDITION_A_TOOLS
 
-
 # ---------------------------------------------------------------------------
 # 1. Build tests
 # ---------------------------------------------------------------------------
+
 
 class TestBuildAgent:
 
@@ -117,16 +118,16 @@ class TestBuildAgent:
 # 2. Condition boundary tests
 # ---------------------------------------------------------------------------
 
+
 class TestConditionBoundary:
     """
-    Verify that get_tools_and_prompt enforces strict condition boundaries.
+    Verify that get_tools enforces strict condition boundaries.
     Tool registry is the source of truth — the compiled graph cannot
     register tools that the registry did not return.
     """
 
     def _get_tool_names(self, condition: str) -> frozenset[str]:
-        from tools.tool_registry import get_tools_and_prompt
-        tools, _ = get_tools_and_prompt(condition)
+        tools = get_tools(condition)
         return frozenset(t.name for t in tools)
 
     def test_condition_a_has_exactly_correct_tools(self):
@@ -136,8 +137,7 @@ class TestConditionBoundary:
             f"  Expected: {sorted(_CONDITION_A_TOOLS)}\n"
             f"  Actual:   {sorted(actual)}\n"
             f"  Missing:  {sorted(_CONDITION_A_TOOLS - actual)}\n"
-            f"  Extra:    {sorted(actual - _CONDITION_A_TOOLS)}"
-        )
+            f"  Extra:    {sorted(actual - _CONDITION_A_TOOLS)}")
 
     def test_condition_b_has_exactly_correct_tools(self):
         actual = self._get_tool_names("B")
@@ -146,22 +146,19 @@ class TestConditionBoundary:
             f"  Expected: {sorted(_CONDITION_B_TOOLS)}\n"
             f"  Actual:   {sorted(actual)}\n"
             f"  Missing:  {sorted(_CONDITION_B_TOOLS - actual)}\n"
-            f"  Extra:    {sorted(actual - _CONDITION_B_TOOLS)}"
-        )
+            f"  Extra:    {sorted(actual - _CONDITION_B_TOOLS)}")
 
     def test_no_condition_b_exclusive_tool_in_condition_a(self):
         actual = self._get_tool_names("A")
         leaked = actual & _B_EXCLUSIVE
         assert not leaked, (
-            f"Condition B exclusive tools found in Condition A: {leaked}"
-        )
+            f"Condition B exclusive tools found in Condition A: {leaked}")
 
     def test_no_condition_a_exclusive_tool_in_condition_b(self):
         actual = self._get_tool_names("B")
         leaked = actual & _A_EXCLUSIVE
         assert not leaked, (
-            f"Condition A exclusive tools found in Condition B: {leaked}"
-        )
+            f"Condition A exclusive tools found in Condition B: {leaked}")
 
     def test_shared_tools_present_in_both_conditions(self):
         shared = _CONDITION_A_TOOLS & _CONDITION_B_TOOLS
@@ -177,9 +174,11 @@ class TestConditionBoundary:
     def test_correct_tool_count_condition_b(self):
         assert len(self._get_tool_names("B")) == 5
 
+
 # ---------------------------------------------------------------------------
 # 3. Prompt integrity tests
 # ---------------------------------------------------------------------------
+
 
 class TestPromptIntegrity:
 
@@ -188,46 +187,35 @@ class TestPromptIntegrity:
         for tool_name in _B_EXCLUSIVE:
             assert tool_name not in prompt, (
                 f"Condition B exclusive tool '{tool_name}' "
-                f"found in Condition A system prompt"
-            )
+                f"found in Condition A system prompt")
 
     def test_condition_b_prompt_contains_no_a_exclusive_tools(self, graph_b):
         _, prompt = graph_b
         for tool_name in _A_EXCLUSIVE:
             assert tool_name not in prompt, (
                 f"Condition A exclusive tool '{tool_name}' "
-                f"found in Condition B system prompt"
-            )
+                f"found in Condition B system prompt")
 
-    def test_condition_a_prompt_contains_a_tools(self, graph_a):
-        _, prompt = graph_a
-        for tool_name in _A_EXCLUSIVE:
-            assert tool_name in prompt, (
-                f"Condition A tool '{tool_name}' missing from Condition A prompt"
-            )
-
-    def test_condition_b_prompt_contains_b_tools(self, graph_b):
-        _, prompt = graph_b
-        for tool_name in _B_EXCLUSIVE:
-            assert tool_name in prompt, (
-                f"Condition B tool '{tool_name}' missing from Condition B prompt"
-            )
-
-    def test_both_prompts_contain_submit_diagnosis(self, graph_a, graph_b):
-        _, prompt_a = graph_a
-        _, prompt_b = graph_b
-        assert "submit_diagnosis" in prompt_a
-        assert "submit_diagnosis" in prompt_b
-
-    def test_both_prompts_contain_valid_fault_types(self, graph_a, graph_b):
-        fault_types = [
-            "connection-pool-starvation", "cpu-saturation",
-            "circuit-breaker-open", "thread-pool-exhaustion",
-            "memory-leak", "pod-oomkill",
-        ]
-        for _, prompt in [graph_a, graph_b]:
-            for ft in fault_types:
-                assert ft in prompt, f"Fault type '{ft}' missing from prompt"
+    def test_submit_diagnosis_schema_contains_all_fault_types(self):
+        """
+        Fault types must be enforced via submit_diagnosis tool schema enums,
+        not via the system prompt.
+        """
+        fault_types = {
+            "connection-pool-starvation",
+            "cpu-saturation",
+            "circuit-breaker-open",
+            "thread-pool-exhaustion",
+            "memory-leak",
+            "pod-oomkill",
+        }
+        tools = get_tools("A")
+        submit = next(t for t in tools if t.name == "submit_diagnosis")
+        schema = submit.args_schema.schema()
+        schema_str = str(schema)
+        for ft in fault_types:
+            assert ft in schema_str, (
+                f"Fault type '{ft}' missing from submit_diagnosis schema")
 
     def test_both_prompts_contain_valid_services(self, graph_a, graph_b):
         services = ["inventory-service", "order-service", "payment-service"]
@@ -239,6 +227,7 @@ class TestPromptIntegrity:
 # ---------------------------------------------------------------------------
 # 4. Recursion limit and state helper tests
 # ---------------------------------------------------------------------------
+
 
 class TestGraphConfig:
 
@@ -253,9 +242,9 @@ class TestGraphConfig:
     def test_build_initial_state_structure(self, graph_a):
         _, prompt = graph_a
         state = build_initial_state("A", prompt)
-        assert state["condition"]   == "A"
-        assert state["step_count"]  == 0
-        assert state["terminated"]  == False
+        assert state["condition"] == "A"
+        assert state["step_count"] == 0
+        assert state["terminated"] == False
         assert len(state["messages"]) == 2  # SystemMessage + HumanMessage
         assert state["system_prompt"] == prompt
 

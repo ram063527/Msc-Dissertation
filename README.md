@@ -1,6 +1,6 @@
 # MSc Dissertation Testbed – Bookstore Microservices
 
-A microservices-based bookstore testbed built for the MSc Advanced Computer Science dissertation at Newcastle University. The system simulates a small e-commerce platform and provides a realistic distributed environment for resilience, observability, and fault-injection research. A diagnostic agent will be added in later stages of the project.
+A microservices-based bookstore testbed built for the MSc Advanced Computer Science dissertation at Newcastle University. The system simulates a small e-commerce platform and provides a realistic distributed environment for resilience, observability, and fault-injection research. A diagnostic agent is located in the `Agent_Impl/` directory.
 
 ## Table of Contents
 - [Overview](#overview)
@@ -11,6 +11,7 @@ A microservices-based bookstore testbed built for the MSc Advanced Computer Scie
 - [Local Build & Test](#local-build--test)
 - [Kubernetes Deployment (Minikube)](#kubernetes-deployment-minikube)
 - [Load Generator](#load-generator)
+- [Diagnostic Agent](#diagnostic-agent)
 - [API Surface](#api-surface)
 - [Fault Injection](#fault-injection)
 - [Configuration](#configuration)
@@ -125,6 +126,17 @@ Environment variables:
 
 A pre-built container is also deployed by the Kubernetes manifests.
 
+## Diagnostic Agent
+The diagnostic agent (`Agent_Impl/`) is a LangGraph-based ReAct agent designed to diagnose faults in the microservices testbed. It supports two observability conditions:
+- **Condition A**: Generic logs and resource metrics.
+- **Condition B**: Deep framework-native observability via Spring Boot Actuator.
+
+To run the agent smoke test:
+```bash
+cd Agent_Impl
+python smoke_test.py --condition B
+```
+
 ## API Surface
 ### Inventory Service
 - `GET /api/products`
@@ -170,7 +182,7 @@ Actuator health checks are enabled (e.g. `/actuator/health/liveness`, `/actuator
 ## Repository Layout
 ```
 .
-├── Agent/                      # Placeholder for the diagnostic agent
+├── Agent_Impl/                 # Diagnostic agent implementation
 ├── Testbed/                    # Microservice system
 │   ├── inventory-service/
 │   ├── order-service/
