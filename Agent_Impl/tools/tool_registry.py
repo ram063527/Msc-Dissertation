@@ -66,29 +66,7 @@ The testbed consists of three microservices running on Kubernetes:
 - You have a maximum of 20 investigation steps before the session ends.
 - A step is one tool call and its result.
 
-## Submitting Your Diagnosis
-When you are confident, call submit_diagnosis with EXACTLY these values:
-
-  service    — the root cause service:
-               "inventory-service" | "order-service" | "payment-service"
-
-  component  — the specific failing component:
-               "hikari-connection-pool" | "cpu" | "resilience4j-circuit-breaker"
-               | "tomcat-thread-pool" | "jvm-heap" | "kubernetes-pod"
-
-  fault_type — the fault classification:
-               "connection-pool-starvation" | "cpu-saturation"
-               | "circuit-breaker-open" | "thread-pool-exhaustion"
-               | "memory-leak" | "pod-oomkill"
-
-  evidence   — a concise summary (minimum 10 characters) of the key
-               observations that support your diagnosis.
-
-Use the exact strings above. Any deviation will fail validation and cost
-you a step. Submit only when confident — you cannot retract a successful
-submission.
 """
-
 
 # Condition-specific tool description sections
 
