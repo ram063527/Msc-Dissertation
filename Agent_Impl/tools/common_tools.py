@@ -194,29 +194,18 @@ def _fetch_and_filter(
 
 
 def submit_diagnosis(
-    service: Literal[
-        "inventory-service",
-        "order-service",
-        "payment-service",
-    ],
-    component: Literal[
-        "hikari-connection-pool",
-        "cpu",
-        "resilience4j-circuit-breaker",
-        "tomcat-thread-pool",
-        "jvm-heap",
-        "kubernetes-pod",
-    ],
-    fault_type: Literal[
-        "connection-pool-starvation",
-        "cpu-saturation",
-        "circuit-breaker-open",
-        "thread-pool-exhaustion",
-        "memory-leak",
-        "pod-oomkill",
-    ],
     evidence: str,
     no_fault_detected: bool = False,
+    service: Optional[Literal["inventory-service", "order-service",
+                              "payment-service"]] = None,
+    component: Optional[Literal["hikari-connection-pool", "cpu",
+                                "resilience4j-circuit-breaker",
+                                "tomcat-thread-pool", "jvm-heap",
+                                "kubernetes-pod"]] = None,
+    fault_type: Optional[Literal["connection-pool-starvation",
+                                 "cpu-saturation", "circuit-breaker-open",
+                                 "thread-pool-exhaustion", "memory-leak",
+                                 "pod-oomkill"]] = None,
 ) -> dict:
     """
     Submit your final diagnosis. This ends the session.
