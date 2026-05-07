@@ -13,7 +13,6 @@ from config import (
     DEFAULT_LOG_LEVEL,
     VALID_SERVICES,
 )
-from schemas.schemas import ToolResponse
 from utils.k8s_utils import (
     core_v1_api,
     custom_api,
@@ -22,13 +21,14 @@ from utils.k8s_utils import (
     parse_cpu_to_millicores,
     parse_memory_to_bytes,
 )
+from utils.tool_utils import make_tool_response
 
 logger = logging.getLogger(__name__)
 
 # Tool 1 — get_service_health_a
 
 
-def get_service_health_a(service: str) -> ToolResponse:
+def get_service_health_a(service: str) -> dict:
     """
     Returns Kubernetes pod health: phase, readiness, restart count,
     and a status_summary of UP / DEGRADED / DOWN.
@@ -38,7 +38,7 @@ def get_service_health_a(service: str) -> ToolResponse:
     tool_name = "get_service_health_a"
 
     if service not in VALID_SERVICES:
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -50,7 +50,7 @@ def get_service_health_a(service: str) -> ToolResponse:
         pod = get_pod(service, NAMESPACE)
 
         if pod is None:
-            return ToolResponse(
+            return make_tool_response(
                 tool=tool_name,
                 status="error",
                 service=service,
@@ -84,7 +84,7 @@ def get_service_health_a(service: str) -> ToolResponse:
         else:
             status_summary = "DOWN"
 
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="success",
             service=service,
@@ -100,7 +100,7 @@ def get_service_health_a(service: str) -> ToolResponse:
     except Exception as e:
         logger.exception(
             f"[{tool_name}] Unexpected error for service '{service}'")
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -111,7 +111,7 @@ def get_service_health_a(service: str) -> ToolResponse:
 # Tool 2 — get_resource_metrics
 
 
-def get_resource_metrics(service: str) -> ToolResponse:
+def get_resource_metrics(service: str) -> dict:
     """
     Returns current CPU and memory usage as percentages of configured
     pod limits. Use to confirm CPU saturation or memory pressure.
@@ -120,7 +120,7 @@ def get_resource_metrics(service: str) -> ToolResponse:
     tool_name = "get_resource_metrics"
 
     if service not in VALID_SERVICES:
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -131,7 +131,7 @@ def get_resource_metrics(service: str) -> ToolResponse:
     try:
         pod_name = get_pod_name(service, NAMESPACE)
         if pod_name is None:
-            return ToolResponse(
+            return make_tool_response(
                 tool=tool_name,
                 status="error",
                 service=service,
@@ -149,7 +149,7 @@ def get_resource_metrics(service: str) -> ToolResponse:
 
         containers = result.get("containers", [])
         if not containers:
-            return ToolResponse(
+            return make_tool_response(
                 tool=tool_name,
                 status="error",
                 service=service,
@@ -175,7 +175,7 @@ def get_resource_metrics(service: str) -> ToolResponse:
         memory_pct = round((memory_bytes / memory_limit_b) *
                            100, 2) if memory_limit_b > 0 else 0.0
 
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="success",
             service=service,
@@ -203,7 +203,7 @@ def get_resource_metrics(service: str) -> ToolResponse:
     except Exception as e:
         logger.exception(
             f"[{tool_name}] Unexpected error for service '{service}'")
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -214,7 +214,7 @@ def get_resource_metrics(service: str) -> ToolResponse:
 # Tool 3 — get_pod_events
 
 
-def get_pod_events(service: str) -> ToolResponse:
+def get_pod_events(service: str) -> dict:
     """
     Returns recent Kubernetes events for the service pod, sorted with
     Warning events first. Use to detect OOMKill, restarts, and
@@ -224,7 +224,7 @@ def get_pod_events(service: str) -> ToolResponse:
     tool_name = "get_pod_events"
 
     if service not in VALID_SERVICES:
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -243,7 +243,7 @@ def get_pod_events(service: str) -> ToolResponse:
         ]
 
         if not relevant:
-            return ToolResponse(
+            return make_tool_response(
                 tool=tool_name,
                 status="success",
                 service=service,
@@ -280,7 +280,7 @@ def get_pod_events(service: str) -> ToolResponse:
                 e.involved_object.name,
             })
 
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="success",
             service=service,
@@ -293,7 +293,7 @@ def get_pod_events(service: str) -> ToolResponse:
     except Exception as e:
         logger.exception(
             f"[{tool_name}] Unexpected error for service '{service}'")
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,

@@ -6,8 +6,8 @@ import logging
 from typing import Optional
 
 from config import VALID_SERVICES
-from schemas.schemas import ToolResponse
 from utils.actuator_utils import actuator_get
+from utils.tool_utils import make_tool_response
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ _CB_SUCCESS_KEEP = 5
 # Tool 1 — get_service_health_b
 
 
-def get_service_health_b(service: str) -> ToolResponse:
+def get_service_health_b(service: str) -> dict:
     """
     Returns the full Spring Boot Actuator health hierarchy including all
     component statuses (db, hikariPool, diskSpace, etc.) with their details.
@@ -30,7 +30,7 @@ def get_service_health_b(service: str) -> ToolResponse:
     tool_name = "get_service_health_b"
 
     if service not in VALID_SERVICES:
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -40,7 +40,7 @@ def get_service_health_b(service: str) -> ToolResponse:
 
     try:
         data = actuator_get(service, "/actuator/health")
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="success",
             service=service,
@@ -49,7 +49,7 @@ def get_service_health_b(service: str) -> ToolResponse:
 
     except Exception as e:
         logger.exception(f"[{tool_name}] Error for service '{service}'")
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -63,7 +63,7 @@ def get_service_health_b(service: str) -> ToolResponse:
 def query_actuator_metrics(
     service: str,
     metric_name: Optional[str] = None,
-) -> ToolResponse:
+) -> dict:
     """
     Query Spring Boot Actuator metrics for a service.
     Call without metric_name to list all available metric names.
@@ -75,7 +75,7 @@ def query_actuator_metrics(
     tool_name = "query_actuator_metrics"
 
     if service not in VALID_SERVICES:
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -88,7 +88,7 @@ def query_actuator_metrics(
             # Return full list of available metric names
             raw = actuator_get(service, "/actuator/metrics")
             names = raw.get("names", [])
-            return ToolResponse(
+            return make_tool_response(
                 tool=tool_name,
                 status="success",
                 service=service,
@@ -110,7 +110,7 @@ def query_actuator_metrics(
             path = f"/actuator/metrics/{metric_name.strip()}"
             raw = actuator_get(service, path)
 
-            return ToolResponse(
+            return make_tool_response(
                 tool=tool_name,
                 status="success",
                 service=service,
@@ -127,7 +127,7 @@ def query_actuator_metrics(
         logger.exception(
             f"[{tool_name}] Error for service '{service}', metric '{metric_name}'"
         )
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -138,7 +138,7 @@ def query_actuator_metrics(
 # Tool 3 — get_circuit_breaker_state
 
 
-def get_circuit_breaker_state(service: str) -> ToolResponse:
+def get_circuit_breaker_state(service: str) -> dict:
     """
     Returns Resilience4j circuit breaker state (CLOSED/OPEN/HALF_OPEN),
     failure rate, and recent event history prioritising STATE_TRANSITION
@@ -148,7 +148,7 @@ def get_circuit_breaker_state(service: str) -> ToolResponse:
     tool_name = "get_circuit_breaker_state"
 
     if service not in VALID_SERVICES:
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -163,7 +163,7 @@ def get_circuit_breaker_state(service: str) -> ToolResponse:
         logger.exception(
             f"[{tool_name}] Failed to fetch circuit breaker state for '{service}'"
         )
-        return ToolResponse(
+        return make_tool_response(
             tool=tool_name,
             status="error",
             service=service,
@@ -194,7 +194,7 @@ def get_circuit_breaker_state(service: str) -> ToolResponse:
     # --- Build response ---
     cb_states = state_raw.get("circuitBreakers", {})
 
-    return ToolResponse(
+    return make_tool_response(
         tool=tool_name,
         status="success",
         service=service,
