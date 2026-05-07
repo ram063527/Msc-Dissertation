@@ -46,6 +46,8 @@ order-service. payment-service does not have a database.
 - When you have clear evidence, call submit_diagnosis immediately.
 - If all services are healthy after checking each one, call submit_diagnosis \
 with no_fault_detected=True.
+- If no_fault_detected=True, pass service, component, and fault_type as None.
+Do NOT guess values for them.
 
 ## Submitting Your Diagnosis
 Call submit_diagnosis with:
