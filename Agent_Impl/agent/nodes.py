@@ -1,11 +1,9 @@
-
 # Node factory functions for the diagnostic agent graph.
 #
 # Both nodes are constructed via factory functions that close over
 # the model and tools. The factories are called once in graph.py;
 # the returned callables are registered as graph nodes.
 #
-
 
 import json
 import logging
@@ -80,7 +78,6 @@ def make_tools_node(tools: list[BaseTool]) -> Callable:
     # tool calls in a single AIMessage, exception catching per tool call,
     # and ToolMessage construction with correct tool_call_id linkage.
 
-
     _tool_node = ToolNode(tools)
 
     def tools_node(state: AgentState) -> dict:
@@ -136,22 +133,37 @@ def make_tools_node(tools: list[BaseTool]) -> Callable:
 # Internal helpers
 
 
-def _check_submission_succeeded(content: str) -> bool:
+def _check_submission_succeeded(content) -> bool:
     """
     Parse ToolMessage content from submit_diagnosis and return True
     if the submission was successful.
 
-    ToolNode serialises our ToolResponse Pydantic model to a JSON string.
-    We parse it and check data.submitted == True.
+    Tools return a plain dict. LangGraph's ToolNode serialises it to a
+    JSON string. Defensive handling for list and dict types is included
+    for LangGraph version resilience.
 
-    Returns False (not True) on any parse failure — conservative default
-    keeps the session running rather than terminating incorrectly.
+    Returns False on any parse failure — conservative default keeps the
+    session running rather than terminating incorrectly.
     """
+    # Normalise list content (LangGraph structured content blocks)
+    if isinstance(content, list):
+        content = " ".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content)
+
+    # Defensive: handle if LangGraph ever passes the dict directly
+    if isinstance(content, dict):
+        return content.get("data", {}).get("submitted") is True
+
+    if not isinstance(content, str):
+        return False
+
+    # Primary path: JSON string from ToolNode serialisation
     try:
         parsed = json.loads(content)
         return parsed.get("data", {}).get("submitted") is True
     except (json.JSONDecodeError, AttributeError, TypeError):
         logger.warning(
-            f"[tools_node] Could not parse submit_diagnosis response content: "
-            f"{content[:200]}")
+            f"[tools_node] Could not parse submit_diagnosis response: "
+            f"{str(content)[:200]}")
         return False
