@@ -39,6 +39,14 @@ build/
 ### Mac OS ###
 .DS_Store
 
+#Py cache
+
+*.pyc
+__pycache__/
+
+/Agent_Impl/*.pyc
+/Agent_Impl/__pycache__/
+
 
 #####
 .gemini
@@ -49,3 +57,4 @@ build/
 
 /Agent_Impl/myVenv
 /Agent_Impl/.env
+/Agent_Impl/smoke_test_results
