@@ -1,11 +1,15 @@
-# MSc Dissertation Testbed – Bookstore Microservices
+# MSc Dissertation Testbed – Bookstore Microservices & Diagnostic Agent
 
-A microservices-based bookstore testbed built for the MSc Advanced Computer Science dissertation at Newcastle University. The system simulates a small e-commerce platform and provides a realistic distributed environment for resilience, observability, and fault-injection research. A diagnostic agent is located in the `Agent_Impl/` directory.
+A microservices-based bookstore testbed built for the MSc Advanced Computer Science dissertation at Newcastle University. The repository contains two main components:
+- **Testbed**: Spring Boot microservices, PostgreSQL, and a Python load generator for resilience and fault-injection experiments.
+- **Diagnostic Agent**: A LangGraph-based ReAct agent (in `Agent_Impl/`) that diagnoses faults under two observability conditions.
 
 ## Table of Contents
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Services & Responsibilities](#services--responsibilities)
+- [Observability Conditions](#observability-conditions)
+- [Fault Injection & Catalog](#fault-injection--catalog)
 - [Tech Stack](#tech-stack)
 - [Quick Start (Docker Compose)](#quick-start-docker-compose)
 - [Local Build & Test](#local-build--test)
@@ -13,12 +17,11 @@ A microservices-based bookstore testbed built for the MSc Advanced Computer Scie
 - [Load Generator](#load-generator)
 - [Diagnostic Agent](#diagnostic-agent)
 - [API Surface](#api-surface)
-- [Fault Injection](#fault-injection)
 - [Configuration](#configuration)
 - [Repository Layout](#repository-layout)
 
 ## Overview
-The testbed models a simple bookstore with inventory, ordering, and payments. It is designed to be small enough to run locally, yet rich enough to study microservice interactions, reliability patterns, and system behavior under faults.
+The testbed models a simple bookstore with inventory, ordering, and payments. It is designed to be small enough to run locally, yet rich enough to study microservice interactions, reliability patterns, and system behavior under faults. The diagnostic agent automates fault investigation using Kubernetes and/or Actuator telemetry.
 
 ## Architecture
 - **Inventory Service** manages book catalog and stock.
@@ -26,7 +29,7 @@ The testbed models a simple bookstore with inventory, ordering, and payments. It
 - **Payment Service** handles payment authorization requests.
 - **PostgreSQL** provides separate databases for inventory and orders.
 - **Load Generator** continuously browses catalog items and places orders.
-- **Fault Injection** endpoints allow toggling controlled failures (inventory/payment).
+- **Fault Injection** endpoints enable controlled failure scenarios.
 
 ## Services & Responsibilities
 | Service | Port | Purpose |
@@ -36,14 +39,40 @@ The testbed models a simple bookstore with inventory, ordering, and payments. It
 | Payment Service | 8083 | Payment authorization |
 | PostgreSQL | 5432 | Inventory + Orders databases |
 
+## Observability Conditions
+Two experiment conditions are supported:
+- **Condition A (Generic Infrastructure Observability)**: Kubernetes pod health, Metrics Server usage, pod events, and filtered application logs.
+- **Condition B (Framework-Native Observability)**: Spring Boot Actuator health/metrics and Resilience4j circuit breaker telemetry, plus logs.
+
+The Kubernetes manifests set `SPRING_PROFILES_ACTIVE=condition-a` (or `condition-b`) to control logging visibility for each condition.
+
+## Fault Injection & Catalog
+Faults are toggled via internal endpoints:
+- `GET /internal/fault`
+- `POST /internal/fault/activate/{faultId}`
+- `POST /internal/fault/deactivate/{faultId}`
+
+Fault catalog:
+| Fault ID | Service | Description |
+| --- | --- | --- |
+| f1 | inventory-service | Starves the Hikari connection pool by holding connections |
+| f2 | inventory-service | CPU saturation via intensive worker threads |
+| f3 | payment-service | Forced payment authorization failures (HTTP 500) |
+| f4 | inventory-service | Tomcat thread pool exhaustion by blocking requests |
+| f5 | inventory-service | Slow heap memory leak and sustained pressure |
+| f6 | inventory-service | Off-heap spike to trigger Kubernetes OOMKill |
+
+These endpoints are intended for controlled experimentation and should not be exposed publicly.
+
 ## Tech Stack
-- Java 25 + Spring Boot
+- Java 25 + Spring Boot 3.5
 - PostgreSQL 16
 - Maven (multi-module build)
 - Flyway migrations with seeded inventory data
-- Resilience4j for circuit breakers
+- Resilience4j for circuit breakers (order-service)
 - Docker Compose + Minikube/Kubernetes
-- Python load generator
+- Python 3.12 load generator and diagnostic agent
+- LangGraph + LangChain tools for the agent
 
 ## Quick Start (Docker Compose)
 Run everything locally using Docker Compose and the Taskfile.
@@ -70,16 +99,25 @@ Services will be available at:
 - Payments: http://localhost:8083
 
 ## Local Build & Test
-From the `Testbed` directory:
-
+**Testbed (Java)**
 ```bash
+cd Testbed
+
 task test
+# or
+bash ./mvnw clean verify
 ```
 
-Or directly with Maven wrapper:
-
+**Diagnostic Agent (Python)**
 ```bash
-./mvnw clean verify
+cd Agent_Impl
+python -m pip install -r requirements.txt
+pytest -m "not integration"
+```
+
+Integration tests require a running Minikube cluster with NodePorts exposed and a valid `kubectl` context:
+```bash
+pytest -m integration
 ```
 
 ## Kubernetes Deployment (Minikube)
@@ -127,19 +165,36 @@ Environment variables:
 A pre-built container is also deployed by the Kubernetes manifests.
 
 ## Diagnostic Agent
-The diagnostic agent (`Agent_Impl/`) is a LangGraph-based ReAct agent designed to diagnose faults in the microservices testbed. It supports two observability conditions:
-- **Condition A**: Generic logs and resource metrics.
-- **Condition B**: Deep framework-native observability via Spring Boot Actuator.
+The diagnostic agent (`Agent_Impl/`) is a LangGraph-based ReAct agent designed to diagnose faults in the microservices testbed.
 
-To run the agent smoke test:
+**Prerequisites**
+- Minikube cluster running with NodePorts exposed
+- `kubectl` context pointing at the Minikube cluster
+- LM Studio (or any OpenAI-compatible endpoint) running locally
+
+**Install dependencies**
 ```bash
 cd Agent_Impl
+python -m pip install -r requirements.txt
+```
+
+**Run the smoke test**
+```bash
 python smoke_test.py --condition B
 ```
 
+**Agent environment variables**
+- `LM_STUDIO_BASE_URL` (default: `http://localhost:1234/v1`)
+- `LM_STUDIO_API_KEY` (default: `lm-studio`)
+- `MODEL_NAME` (default: `qwen/qwen3.5-9b_Paritosh`)
+- `MODEL_TEMPERATURE` (default: `0.2`)
+- `INVENTORY_BASE_URL` (default: `http://127.0.0.1:30081`)
+- `ORDER_BASE_URL` (default: `http://127.0.0.1:30082`)
+- `PAYMENT_BASE_URL` (default: `http://127.0.0.1:30083`)
+
 ## API Surface
 ### Inventory Service
-- `GET /api/products`
+- `GET /api/products` (supports filtering by `query`, `genre`, `author`, `name`, `isbn`, `minPrice`, `maxPrice`, `pageNo`)
 - `GET /api/products/{code}`
 - `POST /api/products`
 - `PUT /api/products/{code}`
@@ -157,20 +212,12 @@ python smoke_test.py --condition B
 ### Payment Service
 - `POST /api/payments/authorizations`
 
-## Fault Injection
-Inventory and Payment services expose internal fault controls:
-- `GET /internal/fault`
-- `POST /internal/fault/activate/{faultId}`
-- `POST /internal/fault/deactivate/{faultId}`
-
-These endpoints are intended for controlled experimentation and should not be exposed publicly.
-
 ## Configuration
 Common environment variables:
 - `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (inventory + orders)
 - `ORDER_INVENTORY_SERVICE_URL` (order service)
 - `ORDER_PAYMENT_SERVICE_URL` (order service)
-- `SPRING_PROFILES_ACTIVE` (condition profiles used by the test harness)
+- `SPRING_PROFILES_ACTIVE` (`condition-a`, `condition-b`, or `docker`)
 
 Default ports:
 - Inventory: **8081**
@@ -182,7 +229,7 @@ Actuator health checks are enabled (e.g. `/actuator/health/liveness`, `/actuator
 ## Repository Layout
 ```
 .
-├── Agent_Impl/                 # Diagnostic agent implementation
+├── Agent_Impl/                 # Diagnostic agent implementation + tests
 ├── Testbed/                    # Microservice system
 │   ├── inventory-service/
 │   ├── order-service/
