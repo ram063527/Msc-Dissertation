@@ -71,7 +71,7 @@ These endpoints are intended for controlled experimentation and should not be ex
 - Flyway migrations with seeded inventory data
 - Resilience4j for circuit breakers (order-service)
 - Docker Compose + Minikube/Kubernetes
-- Python 3.12 load generator and diagnostic agent
+- Python 3.11+ load generator and diagnostic agent (tested with 3.12)
 - LangGraph + LangChain tools for the agent
 
 ## Quick Start (Docker Compose)
@@ -186,7 +186,7 @@ python smoke_test.py --condition B
 **Agent environment variables**
 - `LM_STUDIO_BASE_URL` (default: `http://localhost:1234/v1`)
 - `LM_STUDIO_API_KEY` (default: `lm-studio`)
-- `MODEL_NAME` (default: `qwen/qwen3.5-9b_Paritosh`)
+- `MODEL_NAME` (default: `qwen/qwen3.5-9b_Paritosh`; override to match your LM Studio model)
 - `MODEL_TEMPERATURE` (default: `0.2`)
 - `INVENTORY_BASE_URL` (default: `http://127.0.0.1:30081`)
 - `ORDER_BASE_URL` (default: `http://127.0.0.1:30082`)
